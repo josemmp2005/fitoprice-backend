@@ -2,7 +2,8 @@ import { supabase } from "../config/supabase.js";
 
 export const importProducts = async(req, res) => {
     try {
-        const data = req.body;
+        const response = req.body;
+        const data = response["data"];
 
         if (!data || !Array.isArray(data)) {
             return res.status(400).json({ error: "Formato inválido: debe ser una lista de objetos" });
