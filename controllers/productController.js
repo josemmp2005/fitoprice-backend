@@ -165,7 +165,7 @@ export const importProducts = async(req, res) => {
         });
 
     } catch (error) {
-        console.error("❌ Error general:", error);
+        console.error("Error general:", error);
         res.status(500).json({ error: "Error interno del servidor", details: error.message });
     }
 };
@@ -180,7 +180,7 @@ export const getAllProducts = async(req, res) => {
         }
         res.json(data);
     } catch (error) {
-        console.error("❌ Error al obtener productos:", error);
+        console.error("Error al obtener productos:", error);
         res.status(500).json({ error: "Error interno del servidor", details: error.message });
     }
 };
@@ -198,7 +198,28 @@ export const getProductById = async(req, res) => {
         }
         res.json(data);
     } catch (error) {
-        console.error("❌ Error al obtener producto:", error);
+        console.error("Error al obtener producto:", error);
         res.status(500).json({ error: "Error interno del servidor", details: error.message });
     }
 };
+
+
+export const getLastProductPrice = async(req, res) => {
+    try {
+        const { id } = req.params;
+        const { data, error } = await supabase
+            .from('product_prices')
+            .select('price, created_at')
+            .eq('product_id', id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+        res.json(data);
+    } catch (error) {
+        console.error("Error al obtener el último precio del producto:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+}
