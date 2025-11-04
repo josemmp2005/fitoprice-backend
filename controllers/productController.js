@@ -167,3 +167,18 @@ export const importProducts = async(req, res) => {
         res.status(500).json({ error: "Error interno del servidor", details: error.message });
     }
 };
+
+export const getAllProducts = async(req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('products')
+            .select('*');
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+        res.json(data);
+    } catch (error) {
+        console.error("❌ Error al obtener productos:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+};
