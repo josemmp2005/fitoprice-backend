@@ -209,9 +209,9 @@ export const getLastProductPrice = async(req, res) => {
         const { id } = req.params;
         const { data, error } = await supabase
             .from('product_prices')
-            .select('price, created_at')
+            .select('price, scraped_at')
             .eq('product_id', id)
-            .order('created_at', { ascending: false })
+            .order('scraped_at', { ascending: false })
             .limit(1)
             .single();
         if (error) {
