@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import productRoutes from "./routes/productRoutes.js";
+import companyRoute from "./routes/companyRoute.js";
 
 dotenv.config();
 
@@ -16,6 +17,8 @@ app.use(express.json());
 
 // Rutas
 app.use("/products", productRoutes);
+app.use("/companies", companyRoute);
+
 
 // Ruta de prueba
 app.get("/", (req, res) => {
