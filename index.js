@@ -9,7 +9,7 @@ dotenv.config();
 const app = express();
 
 app.use(cors({
-    origin: ["http://localhost:5173", "https://tudominio.com"],
+    origin: ["http://localhost:5173", "https://fitoprice.netlify.app/"],
     credentials: true,
 }));
 
