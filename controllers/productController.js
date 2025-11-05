@@ -183,7 +183,24 @@ export const getAllProducts = async(req, res) => {
         if (error) {
             return res.status(500).json({ error: error.message });
         }
+
+        for (const product of data) {
+            const { data: priceData, error: priceError } = await supabase
+                .from('product_prices')
+                .select('price, scraped_at')
+                .eq('product_id', product.id)
+                .order('scraped_at', { ascending: false })
+                .limit(1)
+                .single();
+            if (priceError) {
+                console.error(`Error al obtener precio para el producto ${product.id}:`, priceError.message);
+                continue;
+            }
+            product.price = priceData.price;
+            product.scraped_at = priceData.scraped_at;
+        }
         res.json(data);
+
     } catch (error) {
         console.error("Error al obtener productos:", error);
         res.status(500).json({ error: "Error interno del servidor", details: error.message });
@@ -201,6 +218,7 @@ export const getProductById = async(req, res) => {
         if (error) {
             return res.status(500).json({ error: error.message });
         }
+
         res.json(data);
     } catch (error) {
         console.error("Error al obtener producto:", error);
