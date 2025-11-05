@@ -4,7 +4,10 @@ import { supabase } from "../config/supabase.js";
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Función para procesar un producto individual SIN reintentos (para debug)
-async function processProduct(productName, productPrice, productImgUrl, companyId) {
+async function processProduct(productName, productPrice, productImgUrl, link, companyId) {
+
+    // console.log(productName, productPrice, productImgUrl, link, companyId);
+
     try {
         // 1️⃣ Buscar producto existente
         const { data: existingProduct, error: searchError } = await supabase
@@ -53,7 +56,8 @@ async function processProduct(productName, productPrice, productImgUrl, companyI
             .insert({
                 product_id: productId,
                 company_id: companyId,
-                price: productPrice
+                price: productPrice,
+                product_link: link
             });
 
         if (priceError) throw priceError;
@@ -109,6 +113,7 @@ export const importProducts = async(req, res) => {
                     const productName = name[i];
                     const productPrice = price[i];
                     const productImgUrl = img[i];
+                    const productLink = link[i];
 
                     // Validar campos esenciales
                     if (!productName || !company_id || !productPrice) {
@@ -120,7 +125,7 @@ export const importProducts = async(req, res) => {
                     console.log(`[${totalProcessed}] Procesando: ${productName}`);
 
                     // Procesar producto
-                    const result = await processProduct(productName, productPrice, productImgUrl, company_id);
+                    const result = await processProduct(productName, productPrice, productImgUrl, productLink, company_id);
 
                     if (result.isNew) {
                         insertedProducts++;
