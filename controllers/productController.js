@@ -186,7 +186,11 @@ export const getAllProducts = async(req, res) => {
                     price,
                     scraped_at,
                     product_link,
-                    company_id
+                    company_id,
+                    companies (
+                        id,
+                        name
+                    )
                 )
             `);
 
@@ -208,6 +212,7 @@ export const getAllProducts = async(req, res) => {
                 scraped_at: latestPrice ? latestPrice.scraped_at : null,
                 product_link: latestPrice ? latestPrice.product_link : null,
                 company_id: latestPrice ? latestPrice.company_id : null,
+                company_name: latestPrice && latestPrice.companies ? latestPrice.companies.name : null,
                 product_prices: undefined // Eliminar el array anidado
             };
         });
