@@ -227,6 +227,23 @@ export const getAllProducts = async(req, res) => {
     }
 };
 
+export const getfifteenProducts = async(req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('products')
+            .select('*')
+            .limit(15);
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+        res.json(data);
+
+    } catch (error) {
+        console.error("Error al obtener productos:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+}
+
 export const getProductById = async(req, res) => {
     try {
         const { id } = req.params;
