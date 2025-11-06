@@ -36,15 +36,51 @@ export const addCompany = async(req, res) => {
 export const getCompaniesByProduct = async(req, res) => {
     try {
         const { productId } = req.params;
+        // Traemos todas las filas de product_prices para ese producto incluyendo la info de company
         const { data, error } = await supabase
             .from('product_prices')
-            .select('company_id, product_link, companies(name, website), price')
-            .eq('product_id', productId)
-            .order('price', { ascending: true });
+            .select('company_id, product_link, scraped_at, price, companies(name, website)')
+            .eq('product_id', productId);
+
         if (error) {
             return res.status(500).json({ error: error.message });
         }
-        res.json(data);
+
+        // Dedupe por company_id quedándonos con la entrada con scraped_at más reciente
+        const latestByCompany = new Map();
+        for (const row of data) {
+            const cid = row.company_id;
+            const existing = latestByCompany.get(cid);
+            if (!existing) {
+                latestByCompany.set(cid, row);
+                continue;
+            }
+            const existingDate = existing.scraped_at ? new Date(existing.scraped_at) : null;
+            const rowDate = row.scraped_at ? new Date(row.scraped_at) : null;
+            if (!existingDate && rowDate) {
+                latestByCompany.set(cid, row);
+            } else if (existingDate && rowDate && rowDate > existingDate) {
+                latestByCompany.set(cid, row);
+            }
+        }
+
+        // Formatear resultado y ordenar por precio ascendente
+        const result = Array.from(latestByCompany.values())
+            .map(r => ({
+                company_id: r.company_id,
+                name: r.companies ? r.companies.name : null,
+                website: r.companies ? r.companies.website : null,
+                product_link: r.product_link,
+                price: r.price,
+                scraped_at: r.scraped_at
+            }))
+            .sort((a, b) => {
+                const priceA = a.price !== null && a.price !== undefined ? a.price : Infinity;
+                const priceB = b.price !== null && b.price !== undefined ? b.price : Infinity;
+                return priceA - priceB;
+            });
+
+        res.json(result);
     } catch (error) {
         console.error("Error al obtener empresas por producto:", error);
         res.status(500).json({ error: "Error interno del servidor", details: error.message });

@@ -9,7 +9,7 @@ async function processProduct(productName, productPrice, productImgUrl, link, co
     // console.log(productName, productPrice, productImgUrl, link, companyId);
 
     try {
-        // 1️⃣ Buscar producto existente
+        // 1️ Buscar producto existente
         const { data: existingProduct, error: searchError } = await supabase
             .from("products")
             .select("id")
@@ -17,7 +17,7 @@ async function processProduct(productName, productPrice, productImgUrl, link, co
             .maybeSingle();
 
         if (searchError) {
-            console.error(`   🔍 Error búsqueda:`, {
+            console.error(` Error búsqueda:`, {
                 message: searchError.message,
                 code: searchError.code,
                 details: searchError.details,
@@ -32,7 +32,7 @@ async function processProduct(productName, productPrice, productImgUrl, link, co
         if (existingProduct) {
             productId = existingProduct.id;
         } else {
-            // 2️⃣ Crear nuevo producto
+            // 2️ Crear nuevo producto
             const { data: newProduct, error: insertError } = await supabase
                 .from("products")
                 .insert({
@@ -50,7 +50,7 @@ async function processProduct(productName, productPrice, productImgUrl, link, co
             isNew = true;
         }
 
-        // 3️⃣ Insertar precio
+        // 3️ Insertar precio
         const { error: priceError } = await supabase
             .from("product_prices")
             .insert({
