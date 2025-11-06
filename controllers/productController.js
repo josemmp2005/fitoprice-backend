@@ -214,6 +214,7 @@ export const getAllProducts = async(req, res) => {
                 product_link: latestPrice ? latestPrice.product_link : null,
                 company_id: latestPrice ? latestPrice.company_id : null,
                 company_name: latestPrice && latestPrice.companies ? latestPrice.companies.name : null,
+                company_website: latestPrice && latestPrice.companies ? latestPrice.companies.website : null,
                 product_prices: undefined // Eliminar el array anidado
             };
         });
