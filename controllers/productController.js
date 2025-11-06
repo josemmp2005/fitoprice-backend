@@ -189,7 +189,8 @@ export const getAllProducts = async(req, res) => {
                     company_id,
                     companies (
                         id,
-                        name
+                        name,
+                        website
                     )
                 )
             `);
