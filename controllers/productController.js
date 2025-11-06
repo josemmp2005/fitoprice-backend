@@ -294,3 +294,18 @@ export const getLastScrapedAt = async(req, res) => {
         res.status(500).json({ error: "Error interno del servidor", details: error.message });
     }
 };
+
+export const getCountProducts = async(req, res) => {
+    try {
+        const { count, error } = await supabase
+            .from('products')
+            .select('*', { count: 'exact', head: true });
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+        res.json({ count });
+    } catch (error) {
+        console.error("Error al obtener el conteo de productos:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+};
