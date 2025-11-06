@@ -4,11 +4,27 @@ export const getCompanies = async(req, res) => {
     try {
         const { data, error } = await supabase
             .from('companies')
-            .select('*');
+            .select('*, product_prices(product_id)');
+
         if (error) {
             return res.status(500).json({ error: error.message });
         }
-        res.json(data);
+
+        // Contar productos únicos por empresa
+        const companiesWithCount = data.map(company => {
+            // Obtener IDs únicos de productos
+            const uniqueProductIds = new Set(
+                company.product_prices.map(pp => pp.product_id)
+            );
+
+            return {
+                ...company,
+                product_count: uniqueProductIds.size,
+                product_prices: undefined // Eliminar array anidado
+            };
+        });
+
+        res.json(companiesWithCount);
     } catch (error) {
         console.error("Error al obtener empresas:", error);
         res.status(500).json({ error: "Error interno del servidor", details: error.message });
