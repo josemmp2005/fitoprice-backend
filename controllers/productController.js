@@ -245,8 +245,8 @@ export const getfifteenProducts = async(req, res) => {
                         website
                     )
                 )
-            `);
-        .limit(15);
+            `)
+            .limit(15);
 
         if (error) {
             return res.status(500).json({ error: error.message });
