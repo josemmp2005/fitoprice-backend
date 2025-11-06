@@ -276,3 +276,21 @@ export const getHistoryProductPrice = async(req, res) => {
         res.status(500).json({ error: "Error interno del servidor", details: error.message });
     }
 };
+
+export const getLastScrapedAt = async(req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('product_prices')
+            .select('scraped_at')
+            .order('scraped_at', { ascending: false })
+            .limit(1)
+            .single();
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+        res.json(data);
+    } catch (error) {
+        console.error("Error al obtener la última fecha de scraping:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+};
