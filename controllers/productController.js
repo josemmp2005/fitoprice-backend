@@ -229,14 +229,50 @@ export const getAllProducts = async(req, res) => {
 
 export const getfifteenProducts = async(req, res) => {
     try {
+        // Obtener productos con todos sus precios en una sola query usando JOIN
         const { data, error } = await supabase
             .from('products')
-            .select('*')
-            .limit(15);
+            .select(`
+                *,
+                product_prices (
+                    price,
+                    scraped_at,
+                    product_link,
+                    company_id,
+                    companies (
+                        id,
+                        name,
+                        website
+                    )
+                )
+            `);
+        .limit(15);
+
         if (error) {
             return res.status(500).json({ error: error.message });
         }
-        res.json(data);
+
+        // Procesar los datos para quedarnos solo con el último precio de cada producto
+        const productsWithLatestPrice = data.map(product => {
+            // Ordenar los precios por fecha descendente y tomar el primero
+            const sortedPrices = product.product_prices.sort((a, b) =>
+                new Date(b.scraped_at) - new Date(a.scraped_at)
+            );
+            const latestPrice = sortedPrices[0];
+
+            return {
+                ...product,
+                price: latestPrice ? latestPrice.price : null,
+                scraped_at: latestPrice ? latestPrice.scraped_at : null,
+                product_link: latestPrice ? latestPrice.product_link : null,
+                company_id: latestPrice ? latestPrice.company_id : null,
+                company_name: latestPrice && latestPrice.companies ? latestPrice.companies.name : null,
+                company_website: latestPrice && latestPrice.companies ? latestPrice.companies.website : null,
+                product_prices: undefined // Eliminar el array anidado
+            };
+        });
+
+        res.json(productsWithLatestPrice);
 
     } catch (error) {
         console.error("Error al obtener productos:", error);
