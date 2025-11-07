@@ -33,10 +33,10 @@ export const getCompanies = async(req, res) => {
 
 export const addCompany = async(req, res) => {
     try {
-        const { name, website, logo_url } = req.body;
+        const { name, website } = req.body;
         const { data, error } = await supabase
             .from('companies')
-            .insert({ name, website, logo_url })
+            .insert({ name, website })
             .select()
             .single();
         if (error) {
