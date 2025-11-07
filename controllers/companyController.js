@@ -49,6 +49,28 @@ export const addCompany = async(req, res) => {
     }
 };
 
+export const addScrapingConfCompany = async(req, res) => {
+    try {
+        const { companyId } = req.params;
+        const {} = req.body;
+        const { data, error } = await supabase
+            .from('companies')
+            .update({})
+            .eq('id', companyId)
+            .select()
+            .single();
+
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+
+        res.json(data);
+    } catch (error) {
+        console.error("Error al agregar configuración de scraping a la empresa:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+};
+
 export const getCompaniesByProduct = async(req, res) => {
     try {
         const { productId } = req.params;
@@ -99,6 +121,40 @@ export const getCompaniesByProduct = async(req, res) => {
         res.json(result);
     } catch (error) {
         console.error("Error al obtener empresas por producto:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+};
+
+export const getScrapingConfigs = async(req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('company_urls')
+            .select('*, scraping_config(*)');
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+        res.json(data);
+    } catch (error) {
+        console.error("Error al obtener configuraciones de scraping:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+};
+
+export const getScrapingConfigCompany = async(req, res) => {
+    try {
+        const { companyId } = req.params;
+        const { data, error } = await supabase
+            .from('company_urls')
+            .select('*, scraping_config(*)')
+            .eq('company_id', companyId);
+
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+
+        res.json(data);
+    } catch (error) {
+        console.error("Error al obtener configuración de scraping:", error);
         res.status(500).json({ error: "Error interno del servidor", details: error.message });
     }
 };
