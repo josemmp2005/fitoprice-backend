@@ -128,8 +128,8 @@ export const getCompaniesByProduct = async(req, res) => {
 export const getScrapingConfigs = async(req, res) => {
     try {
         const { data, error } = await supabase
-            .from('company_urls')
-            .select('*, scraping_config(*)');
+            .from('companies')
+            .select('id, name, company_urls(*, scraping_config(*))');
         if (error) {
             return res.status(500).json({ error: error.message });
         }
