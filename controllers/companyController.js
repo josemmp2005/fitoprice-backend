@@ -147,7 +147,6 @@ export const getScrapingConfigCompany = async(req, res) => {
             .from('company_urls')
             .select('*, scraping_config(*)')
             .eq('company_id', companyId);
-
         if (error) {
             return res.status(500).json({ error: error.message });
         }
