@@ -26,9 +26,9 @@ export const createNewScrapingJob = async(req, res) => {
             return res.status(500).json({ error: error.message });
         }
 
-        console.log('URL creada:', data);
+        // console.log('URL creada:', data);
         const urlId = data.id;
-        console.log('URL ID:', urlId);
+        // console.log('URL ID:', urlId);
 
         // Insertar las configuraciones de scraping
         const { data: confData, error: confError } = await supabase
