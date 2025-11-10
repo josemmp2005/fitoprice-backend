@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import productRoutes from "./routes/productRoutes.js";
 import companyRoute from "./routes/companyRoute.js";
+import scrapingRoutes from "./routes/scrapingRoutes.js";
 
 dotenv.config();
 
@@ -18,6 +19,7 @@ app.use(express.json());
 // Rutas
 app.use("/products", productRoutes);
 app.use("/companies", companyRoute);
+app.use("/scraping", companyRoute);
 
 
 // Ruta de prueba
