@@ -19,7 +19,7 @@ app.use(express.json());
 // Rutas
 app.use("/products", productRoutes);
 app.use("/companies", companyRoute);
-app.use("/scraping", companyRoute);
+app.use("/scraping", scrapingRoutes);
 
 
 // Ruta de prueba
