@@ -9,7 +9,7 @@ export const createNewScrapingJob = async(req, res) => {
             return res.status(400).json({ error: "Todos los campos son requeridos" });
         }
 
-        console.log('Creando job de scraping:', { company_id, url, selector_title, selector_price, selector_image, selector_link });
+        // console.log('Creando job de scraping:', { company_id, url, selector_title, selector_price, selector_image, selector_link });
 
         // Insertar la URL de la empresa
         const { data, error } = await supabase
@@ -28,6 +28,7 @@ export const createNewScrapingJob = async(req, res) => {
 
         console.log('URL creada:', data);
         const urlId = data.id;
+        console.log('URL ID:', urlId);
 
         // Insertar las configuraciones de scraping
         const { data: confData, error: confError } = await supabase
