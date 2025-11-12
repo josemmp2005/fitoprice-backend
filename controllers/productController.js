@@ -286,19 +286,58 @@ export const getfifteenProducts = async(req, res) => {
 
 export const getProductById = async(req, res) => {
     try {
-        const { id } = req.params;
+        // Obtener productos con todos sus precios en una sola query usando JOIN
+        const productId = req.params.id;
         const { data, error } = await supabase
             .from('products')
-            .select('*')
-            .eq('id', id)
-            .single();
+            .select(`
+                *,
+                product_prices (
+                    price,
+                    scraped_at,
+                    product_link,
+                    company_id,
+                    companies (
+                        id,
+                        name,
+                        website
+                    )
+                )
+            `)
+            .eq('id', productId);
+
         if (error) {
             return res.status(500).json({ error: error.message });
         }
 
-        res.json(data);
+        // Procesar los datos para quedarnos solo con el último precio de cada producto
+        const productsWithLatestPrice = data.map(product => {
+            // Ordenar los precios por fecha descendente y tomar el primero
+            const sortedPrices = product.product_prices.sort((a, b) =>
+                new Date(b.scraped_at) - new Date(a.scraped_at)
+            );
+
+            const latestPrice = sortedPrices[0];
+            const previousPrice = sortedPrices[1];
+            const priceChange = latestPrice && previousPrice ? ((latestPrice.price - previousPrice.price) / previousPrice.price) * 100 : null;
+
+            return {
+                ...product,
+                price: latestPrice ? latestPrice.price : null,
+                percentage_change: priceChange !== null ? priceChange.toFixed(2) : null,
+                scraped_at: latestPrice ? latestPrice.scraped_at : null,
+                product_link: latestPrice ? latestPrice.product_link : null,
+                company_id: latestPrice ? latestPrice.company_id : null,
+                company_name: latestPrice && latestPrice.companies ? latestPrice.companies.name : null,
+                company_website: latestPrice && latestPrice.companies ? latestPrice.companies.website : null,
+                product_prices: undefined // Eliminar el array anidado
+            };
+        });
+
+        res.json(productsWithLatestPrice);
+
     } catch (error) {
-        console.error("Error al obtener producto:", error);
+        console.error("Error al obtener productos:", error);
         res.status(500).json({ error: "Error interno del servidor", details: error.message });
     }
 };
