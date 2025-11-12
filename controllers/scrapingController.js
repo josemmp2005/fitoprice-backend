@@ -9,8 +9,6 @@ export const createNewScrapingJob = async(req, res) => {
             return res.status(400).json({ error: "Todos los campos son requeridos" });
         }
 
-        // console.log('Creando job de scraping:', { company_id, url, selector_title, selector_price, selector_image, selector_link });
-
         // Insertar la URL de la empresa
         const { data, error } = await supabase
             .from('company_urls')
@@ -26,9 +24,7 @@ export const createNewScrapingJob = async(req, res) => {
             return res.status(500).json({ error: error.message });
         }
 
-        // console.log('URL creada:', data);
         const urlId = data.id;
-        // console.log('URL ID:', urlId);
 
         // Insertar las configuraciones de scraping
         const { data: confData, error: confError } = await supabase
@@ -52,6 +48,16 @@ export const createNewScrapingJob = async(req, res) => {
             url: data,
             scraping_config: confData
         });
+    } catch (error) {
+        console.error("Error al crear nuevo trabajo de scraping:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+};
+
+export const updateScrapingJob = async(req, res) => {
+    try {
+
+
     } catch (error) {
         console.error("Error al crear nuevo trabajo de scraping:", error);
         res.status(500).json({ error: "Error interno del servidor", details: error.message });
