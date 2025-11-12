@@ -205,11 +205,15 @@ export const getAllProducts = async(req, res) => {
             const sortedPrices = product.product_prices.sort((a, b) =>
                 new Date(b.scraped_at) - new Date(a.scraped_at)
             );
+
             const latestPrice = sortedPrices[0];
+            const previousPrice = sortedPrices[1];
+            const priceChange = latestPrice && previousPrice ? ((latestPrice.price - previousPrice.price) / previousPrice.price) * 100 : null;
 
             return {
                 ...product,
                 price: latestPrice ? latestPrice.price : null,
+                percentage_change: priceChange !== null ? priceChange.toFixed(2) : null,
                 scraped_at: latestPrice ? latestPrice.scraped_at : null,
                 product_link: latestPrice ? latestPrice.product_link : null,
                 company_id: latestPrice ? latestPrice.company_id : null,
@@ -298,7 +302,6 @@ export const getProductById = async(req, res) => {
         res.status(500).json({ error: "Error interno del servidor", details: error.message });
     }
 };
-
 
 export const getLastProductPrice = async(req, res) => {
     try {
