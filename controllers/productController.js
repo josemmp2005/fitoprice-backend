@@ -1,9 +1,7 @@
 import { supabase } from "../config/supabase.js";
 
-// Función para esperar
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Función para procesar un producto individual SIN reintentos (para debug)
 async function processProduct(productName, productPrice, productImgUrl, link, companyId) {
 
     // console.log(productName, productPrice, productImgUrl, link, companyId);
