@@ -1,0 +1,411 @@
+import { supabase } from "../config/supabase.js";
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+async function processProduct(productName, productPrice, productImgUrl, link, companyId) {
+
+    // console.log(productName, productPrice, productImgUrl, link, companyId);
+
+    try {
+        // 1️ Buscar producto existente
+        const { data: existingProduct, error: searchError } = await supabase
+            .from("products")
+            .select("id")
+            .eq("name", productName)
+            .maybeSingle();
+
+        if (searchError) {
+            console.error(` Error búsqueda:`, {
+                message: searchError.message,
+                code: searchError.code,
+                details: searchError.details,
+                hint: searchError.hint
+            });
+            throw searchError;
+        }
+
+        let productId;
+        let isNew = false;
+
+        if (existingProduct) {
+            productId = existingProduct.id;
+        } else {
+            // 2️ Crear nuevo producto
+            const { data: newProduct, error: insertError } = await supabase
+                .from("products")
+                .insert({
+                    name: productName,
+                    brand: null,
+                    category: null,
+                    unit: null,
+                    product_img_url: productImgUrl
+                })
+                .select("id")
+                .single();
+
+            if (insertError) throw insertError;
+            productId = newProduct.id;
+            isNew = true;
+        }
+
+        // 3️ Insertar precio
+        const { error: priceError } = await supabase
+            .from("product_prices")
+            .insert({
+                product_id: productId,
+                company_id: companyId,
+                price: productPrice,
+                product_link: link
+            });
+
+        if (priceError) throw priceError;
+
+        return { success: true, isNew, productId };
+    } catch (error) {
+        // Capturar error completo
+        console.error(`   🚨 Error detallado:`, {
+            message: error.message,
+            code: error.code,
+            cause: error.cause,
+            stack: error.stack && error.stack.split('\n')[0]
+        });
+        throw error;
+    }
+}
+
+export const importProducts = async(req, res) => {
+    try {
+        const response = req.body;
+        const data = response["data"];
+
+        // Validar que data es un array
+        if (!data || !Array.isArray(data)) {
+            return res.status(400).json({ error: "Formato inválido: debe ser una lista de objetos" });
+        }
+
+        let insertedProducts = 0;
+        let updatedProducts = 0;
+        let insertedPrices = 0;
+        let errors = [];
+        let totalProcessed = 0;
+
+        const BATCH_SIZE = 50; // Procesar 50 productos, luego pausa
+        const BATCH_DELAY = 1000; // 1 segundo entre lotes grandes
+        const PRODUCT_DELAY = 0; // Sin pausa entre productos individuales
+
+        console.log(`🚀 Iniciando importación de productos...`);
+
+        // Iterar sobre cada grupo
+        for (const group of data) {
+            const { company_id, name, price, img, link } = group;
+
+            // Verificar que los campos sean arrays
+            if (!Array.isArray(name) || !Array.isArray(price) || !Array.isArray(link) || !Array.isArray(img)) {
+                console.log("⚠️ Grupo sin formato de arrays, saltando...");
+                continue;
+            }
+
+            // Procesar productos en lotes
+            for (let i = 0; i < name.length; i++) {
+                try {
+                    const productName = name[i];
+                    const productPrice = price[i];
+                    const productImgUrl = img[i];
+                    const productLink = link[i];
+
+                    // Validar campos esenciales
+                    if (!productName || !company_id || !productPrice) {
+                        console.log(`⚠️ Saltando producto por campos faltantes`);
+                        continue;
+                    }
+
+                    totalProcessed++;
+                    console.log(`[${totalProcessed}] Procesando: ${productName}`);
+
+                    // Procesar producto
+                    const result = await processProduct(productName, productPrice, productImgUrl, productLink, company_id);
+
+                    if (result.isNew) {
+                        insertedProducts++;
+                        console.log(`   ✅ Nuevo (ID: ${result.productId})`);
+                    } else {
+                        updatedProducts++;
+                        console.log(`   ✅ Existe (ID: ${result.productId})`);
+                    }
+
+                    insertedPrices++;
+
+                    // Pausa cada X productos
+                    if (totalProcessed % BATCH_SIZE === 0) {
+                        console.log(`⏸️  Pausa de ${BATCH_DELAY}ms después de ${BATCH_SIZE} productos...`);
+                        await sleep(BATCH_DELAY);
+                    } else if (PRODUCT_DELAY > 0) {
+                        // Pausa entre productos (solo si está configurada)
+                        await sleep(PRODUCT_DELAY);
+                    }
+
+                } catch (productError) {
+                    console.error(`   ❌ Error: ${productError.message}`);
+                    errors.push({ product: name[i], error: productError.message });
+                }
+            }
+        }
+
+        console.log(`\n✅ Importación completada!`);
+        console.log(`   📊 Total procesados: ${totalProcessed}`);
+        console.log(`   ➕ Productos nuevos: ${insertedProducts}`);
+        console.log(`   🔄 Productos existentes: ${updatedProducts}`);
+        console.log(`   💰 Precios insertados: ${insertedPrices}`);
+        console.log(`   ❌ Errores: ${errors.length}`);
+
+        res.json({
+            status: "ok",
+            inserted_products: insertedProducts,
+            updated_products: updatedProducts,
+            inserted_prices: insertedPrices,
+            total_processed: totalProcessed,
+            errors: errors.length > 0 ? errors : undefined
+        });
+
+    } catch (error) {
+        console.error("Error general:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+};
+
+export const getAllProducts = async(req, res) => {
+    try {
+        // Obtener productos con todos sus precios en una sola query usando JOIN
+        const { data, error } = await supabase
+            .from('products')
+            .select(`
+                *,
+                product_prices (
+                    price,
+                    scraped_at,
+                    product_link,
+                    company_id,
+                    companies (
+                        id,
+                        name,
+                        website
+                    )
+                )
+            `);
+
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+
+        // Procesar los datos para quedarnos solo con el último precio de cada producto
+        const productsWithLatestPrice = data.map(product => {
+            // Ordenar los precios por fecha descendente y tomar el primero
+            const sortedPrices = product.product_prices.sort((a, b) =>
+                new Date(b.scraped_at) - new Date(a.scraped_at)
+            );
+
+            const latestPrice = sortedPrices[0];
+            const previousPrice = sortedPrices[1];
+            const priceChange = latestPrice && previousPrice ? ((latestPrice.price - previousPrice.price) / previousPrice.price) * 100 : null;
+
+            return {
+                ...product,
+                price: latestPrice ? latestPrice.price : null,
+                percentage_change: priceChange !== null ? priceChange.toFixed(2) : null,
+                scraped_at: latestPrice ? latestPrice.scraped_at : null,
+                product_link: latestPrice ? latestPrice.product_link : null,
+                company_id: latestPrice ? latestPrice.company_id : null,
+                company_name: latestPrice && latestPrice.companies ? latestPrice.companies.name : null,
+                company_website: latestPrice && latestPrice.companies ? latestPrice.companies.website : null,
+                product_prices: undefined // Eliminar el array anidado
+            };
+        });
+
+        res.json(productsWithLatestPrice);
+
+    } catch (error) {
+        console.error("Error al obtener productos:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+};
+
+export const getfifteenProducts = async(req, res) => {
+    try {
+        // Obtener productos con todos sus precios en una sola query usando JOIN
+        const { data, error } = await supabase
+            .from('products')
+            .select(`
+                *,
+                product_prices (
+                    price,
+                    scraped_at,
+                    product_link,
+                    company_id,
+                    companies (
+                        id,
+                        name,
+                        website
+                    )
+                )
+            `)
+            .limit(10);
+
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+
+        // Procesar los datos para quedarnos solo con el último precio de cada producto
+        const productsWithLatestPrice = data.map(product => {
+            // Ordenar los precios por fecha descendente y tomar el primero
+            const sortedPrices = product.product_prices.sort((a, b) =>
+                new Date(b.scraped_at) - new Date(a.scraped_at)
+            );
+            const latestPrice = sortedPrices[0];
+
+            return {
+                ...product,
+                price: latestPrice ? latestPrice.price : null,
+                scraped_at: latestPrice ? latestPrice.scraped_at : null,
+                product_link: latestPrice ? latestPrice.product_link : null,
+                company_id: latestPrice ? latestPrice.company_id : null,
+                company_name: latestPrice && latestPrice.companies ? latestPrice.companies.name : null,
+                company_website: latestPrice && latestPrice.companies ? latestPrice.companies.website : null,
+                product_prices: undefined // Eliminar el array anidado
+            };
+        });
+
+        res.json(productsWithLatestPrice);
+
+    } catch (error) {
+        console.error("Error al obtener productos:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+}
+
+export const getProductById = async(req, res) => {
+    try {
+        // Obtener productos con todos sus precios en una sola query usando JOIN
+        const productId = req.params.id;
+        const { data, error } = await supabase
+            .from('products')
+            .select(`
+                *,
+                product_prices (
+                    price,
+                    scraped_at,
+                    product_link,
+                    company_id,
+                    companies (
+                        id,
+                        name,
+                        website
+                    )
+                )
+            `)
+            .eq('id', productId);
+
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+
+        // Procesar los datos para quedarnos solo con el último precio de cada producto
+        const productsWithLatestPrice = data.map(product => {
+            // Ordenar los precios por fecha descendente y tomar el primero
+            const sortedPrices = product.product_prices.sort((a, b) =>
+                new Date(b.scraped_at) - new Date(a.scraped_at)
+            );
+
+            const latestPrice = sortedPrices[0];
+            const previousPrice = sortedPrices[1];
+            const priceChange = latestPrice && previousPrice ? ((latestPrice.price - previousPrice.price) / previousPrice.price) * 100 : null;
+
+            return {
+                ...product,
+                price: latestPrice ? latestPrice.price : null,
+                percentage_change: priceChange !== null ? priceChange.toFixed(2) : null,
+                scraped_at: latestPrice ? latestPrice.scraped_at : null,
+                product_link: latestPrice ? latestPrice.product_link : null,
+                company_id: latestPrice ? latestPrice.company_id : null,
+                company_name: latestPrice && latestPrice.companies ? latestPrice.companies.name : null,
+                company_website: latestPrice && latestPrice.companies ? latestPrice.companies.website : null,
+                product_prices: undefined // Eliminar el array anidado
+            };
+        });
+
+        res.json(productsWithLatestPrice);
+
+    } catch (error) {
+        console.error("Error al obtener productos:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+};
+
+export const getLastProductPrice = async(req, res) => {
+    try {
+        const { id } = req.params;
+        const { data, error } = await supabase
+            .from('product_prices')
+            .select('price, scraped_at')
+            .eq('product_id', id)
+            .order('scraped_at', { ascending: false })
+            .limit(1)
+            .single();
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+        res.json(data);
+    } catch (error) {
+        console.error("Error al obtener el último precio del producto:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+}
+
+export const getHistoryProductPrice = async(req, res) => {
+    try {
+        const { id } = req.params;
+        const { data, error } = await supabase
+            .from('product_prices')
+            .select('*')
+            .eq('product_id', id)
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+        res.json(data);
+    } catch (error) {
+        console.error("Error al obtener el historial de precios del producto:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+};
+
+export const getLastScrapedAt = async(req, res) => {
+    try {
+        const { data, error } = await supabase
+            .from('product_prices')
+            .select('scraped_at')
+            .order('scraped_at', { ascending: false })
+            .limit(1)
+            .single();
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+        res.json(data);
+    } catch (error) {
+        console.error("Error al obtener la última fecha de scraping:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+};
+
+export const getCountProducts = async(req, res) => {
+    try {
+        const { count, error } = await supabase
+            .from('products')
+            .select('*', { count: 'exact', head: true });
+        if (error) {
+            return res.status(500).json({ error: error.message });
+        }
+        res.json({ count });
+    } catch (error) {
+        console.error("Error al obtener el conteo de productos:", error);
+        res.status(500).json({ error: "Error interno del servidor", details: error.message });
+    }
+};
