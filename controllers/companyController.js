@@ -32,6 +32,7 @@ export const getCompanies = async(req, res) => {
 };
 
 export const addCompany = async(req, res) => {
+
     try {
         const { name, website } = req.body;
         const { data, error } = await supabase

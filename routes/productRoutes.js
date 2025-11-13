@@ -1,5 +1,7 @@
 import express from "express";
 import { importProducts, getAllProducts, getfifteenProducts, getProductById, getLastProductPrice, getHistoryProductPrice, getLastScrapedAt, getCountProducts } from "../controllers/productController.js";
+import { requireAuth } from "../middlewares/authMiddleware.js";
+
 
 const router = express.Router();
 
