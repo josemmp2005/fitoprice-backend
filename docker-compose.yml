@@ -1,0 +1,49 @@
+name: fitoprice
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fitoprice-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fitoprice
+      POSTGRES_PASSWORD: fitoprice   # solo para desarrollo local
+      POSTGRES_DB: fitoprice
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Se ejecutan solo la primera vez, con el volumen vacío
+      - ./db/01_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./db/02_seed.sql:/docker-entrypoint-initdb.d/02_seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fitoprice -d fitoprice"]
+      interval: 3s
+      retries: 20
+
+  # Scraping programado. El workflow está en ../FitoPrice-n8n/workflows y se importa
+  # con el comando que explica el README de FitoPrice-n8n.
+  n8n:
+    image: n8nio/n8n:3.2.2
+    container_name: fitoprice-n8n
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      GENERIC_TIMEZONE: Europe/Madrid
+      TZ: Europe/Madrid
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      # El workflow lee estas dos variables con $env
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      FITOPRICE_API_URL: http://host.docker.internal:3000
+      FITOPRICE_API_KEY: ${SCRAPER_API_KEY:?Falta SCRAPER_API_KEY en .env}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ../FitoPrice-n8n/workflows:/workflows:ro
+
+volumes:
+  pgdata:
+  n8n_data:

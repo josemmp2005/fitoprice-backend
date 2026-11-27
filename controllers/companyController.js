@@ -1,160 +1,80 @@
-import { supabase } from "../config/supabase.js";
+import { query } from "../config/db.js";
 
-export const getCompanies = async(req, res) => {
+// Envuelve cada handler para responder 500 ante cualquier error
+const handle = (message, fn) => async(req, res) => {
     try {
-        const { data, error } = await supabase
-            .from('companies')
-            .select('*, product_prices(product_id)');
-
-        if (error) {
-            return res.status(500).json({ error: error.message });
-        }
-
-        // Contar productos únicos por empresa
-        const companiesWithCount = data.map(company => {
-            // Obtener IDs únicos de productos
-            const uniqueProductIds = new Set(
-                company.product_prices.map(pp => pp.product_id)
-            );
-
-            return {
-                ...company,
-                product_count: uniqueProductIds.size,
-                product_prices: undefined // Eliminar array anidado
-            };
-        });
-
-        res.json(companiesWithCount);
+        await fn(req, res);
     } catch (error) {
-        console.error("Error al obtener empresas:", error);
+        console.error(`${message}:`, error);
         res.status(500).json({ error: "Error interno del servidor", details: error.message });
     }
 };
 
-export const addCompany = async(req, res) => {
+// URL de una empresa junto con su configuración de scraping (objeto o null)
+const URL_WITH_CONFIG = `to_jsonb(u) || jsonb_build_object('scraping_config', to_jsonb(sc))`;
 
-    try {
-        const { name, website } = req.body;
-        const { data, error } = await supabase
-            .from('companies')
-            .insert({ name, website })
-            .select()
-            .single();
-        if (error) {
-            return res.status(500).json({ error: error.message });
-        }
-        res.status(201).json(data);
-    } catch (error) {
-        console.error("Error al agregar empresa:", error);
-        res.status(500).json({ error: "Error interno del servidor", details: error.message });
-    }
-};
+export const getCompanies = handle("Error al obtener empresas", async(req, res) => {
+    // Incluye el número de productos únicos de cada empresa
+    const { rows } = await query(
+        `SELECT c.*, count(DISTINCT pp.product_id)::int AS product_count
+         FROM companies c
+         LEFT JOIN product_prices pp ON pp.company_id = c.id
+         GROUP BY c.id
+         ORDER BY c.id`
+    );
+    res.json(rows);
+});
 
-export const addScrapingConfCompany = async(req, res) => {
-    try {
-        const { companyId } = req.params;
-        const {} = req.body;
-        const { data, error } = await supabase
-            .from('companies')
-            .update({})
-            .eq('id', companyId)
-            .select()
-            .single();
+export const addCompany = handle("Error al agregar empresa", async(req, res) => {
+    const { name, website } = req.body;
+    const { rows } = await query(
+        "INSERT INTO companies (name, website) VALUES ($1, $2) RETURNING *",
+        [name, website]
+    );
+    res.status(201).json(rows[0]);
+});
 
-        if (error) {
-            return res.status(500).json({ error: error.message });
-        }
+export const getCompaniesByProduct = handle("Error al obtener empresas por producto", async(req, res) => {
+    // Última entrada de cada empresa para el producto, ordenadas por precio
+    const { rows } = await query(
+        `SELECT * FROM (
+             SELECT DISTINCT ON (pp.company_id)
+                    pp.company_id, c.name, c.website, pp.product_link, pp.price, pp.scraped_at
+             FROM product_prices pp
+             JOIN companies c ON c.id = pp.company_id
+             WHERE pp.product_id = $1
+             ORDER BY pp.company_id, pp.scraped_at DESC, pp.id DESC
+         ) latest
+         ORDER BY price`,
+        [req.params.productId]
+    );
+    res.json(rows);
+});
 
-        res.json(data);
-    } catch (error) {
-        console.error("Error al agregar configuración de scraping a la empresa:", error);
-        res.status(500).json({ error: "Error interno del servidor", details: error.message });
-    }
-};
+export const getScrapingConfigs = handle("Error al obtener configuraciones de scraping", async(req, res) => {
+    const { rows } = await query(
+        `SELECT c.id, c.name,
+                coalesce(
+                    jsonb_agg(${URL_WITH_CONFIG} ORDER BY u.id) FILTER (WHERE u.id IS NOT NULL),
+                    '[]'
+                ) AS company_urls
+         FROM companies c
+         LEFT JOIN company_urls u ON u.company_id = c.id
+         LEFT JOIN scraping_config sc ON sc.company_url_id = u.id
+         GROUP BY c.id
+         ORDER BY c.id`
+    );
+    res.json(rows);
+});
 
-export const getCompaniesByProduct = async(req, res) => {
-    try {
-        const { productId } = req.params;
-        // Traemos todas las filas de product_prices para ese producto incluyendo la info de company
-        const { data, error } = await supabase
-            .from('product_prices')
-            .select('company_id, product_link, scraped_at, price, companies(name, website)')
-            .eq('product_id', productId);
-
-        if (error) {
-            return res.status(500).json({ error: error.message });
-        }
-
-        // Dedupe por company_id quedándonos con la entrada con scraped_at más reciente
-        const latestByCompany = new Map();
-        for (const row of data) {
-            const cid = row.company_id;
-            const existing = latestByCompany.get(cid);
-            if (!existing) {
-                latestByCompany.set(cid, row);
-                continue;
-            }
-            const existingDate = existing.scraped_at ? new Date(existing.scraped_at) : null;
-            const rowDate = row.scraped_at ? new Date(row.scraped_at) : null;
-            if (!existingDate && rowDate) {
-                latestByCompany.set(cid, row);
-            } else if (existingDate && rowDate && rowDate > existingDate) {
-                latestByCompany.set(cid, row);
-            }
-        }
-
-        // Formatear resultado y ordenar por precio ascendente
-        const result = Array.from(latestByCompany.values())
-            .map(r => ({
-                company_id: r.company_id,
-                name: r.companies ? r.companies.name : null,
-                website: r.companies ? r.companies.website : null,
-                product_link: r.product_link,
-                price: r.price,
-                scraped_at: r.scraped_at
-            }))
-            .sort((a, b) => {
-                const priceA = a.price !== null && a.price !== undefined ? a.price : Infinity;
-                const priceB = b.price !== null && b.price !== undefined ? b.price : Infinity;
-                return priceA - priceB;
-            });
-
-        res.json(result);
-    } catch (error) {
-        console.error("Error al obtener empresas por producto:", error);
-        res.status(500).json({ error: "Error interno del servidor", details: error.message });
-    }
-};
-
-export const getScrapingConfigs = async(req, res) => {
-    try {
-        const { data, error } = await supabase
-            .from('companies')
-            .select('id, name, company_urls(*, scraping_config(*))');
-        if (error) {
-            return res.status(500).json({ error: error.message });
-        }
-        res.json(data);
-    } catch (error) {
-        console.error("Error al obtener configuraciones de scraping:", error);
-        res.status(500).json({ error: "Error interno del servidor", details: error.message });
-    }
-};
-
-export const getScrapingConfigCompany = async(req, res) => {
-    try {
-        const { companyId } = req.params;
-        const { data, error } = await supabase
-            .from('company_urls')
-            .select('*, scraping_config(*)')
-            .eq('company_id', companyId);
-        if (error) {
-            return res.status(500).json({ error: error.message });
-        }
-
-        res.json(data);
-    } catch (error) {
-        console.error("Error al obtener configuración de scraping:", error);
-        res.status(500).json({ error: "Error interno del servidor", details: error.message });
-    }
-};
+export const getScrapingConfigCompany = handle("Error al obtener configuración de scraping", async(req, res) => {
+    const { rows } = await query(
+        `SELECT ${URL_WITH_CONFIG} AS item
+         FROM company_urls u
+         LEFT JOIN scraping_config sc ON sc.company_url_id = u.id
+         WHERE u.company_id = $1
+         ORDER BY u.id`,
+        [req.params.companyId]
+    );
+    res.json(rows.map(row => row.item));
+});
