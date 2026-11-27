@@ -139,8 +139,10 @@ Las fotos se guardan en un bucket de R2 en vez de enlazarlas desde cada tienda: 
 borran sus fotos, algunas no dejan enlazarlas desde otra web, y Neon tiene poco espacio, así que la
 base de datos solo guarda la URL (`lib/imageStore.js`).
 
-- Al **crear un producto**, la API descarga su foto y la sube como `products/<id>.<ext>`
+- Al **crear un producto**, la API descarga su foto y la sube como `products/<hash>.<ext>`
   (con caché de un año). `products.product_img_url` pasa a ser la URL pública de R2.
+- El nombre del archivo es un hash de la URL de la tienda, no el id del producto: la base local y la de
+  producción usan el mismo bucket y sus ids no tienen por qué coincidir.
 - Si R2 no está configurado o la descarga falla, se queda la URL de la tienda: mejor una foto enlazada que ninguna.
 - Las fotos que había antes de configurar R2 se copian con `npm run images` (se puede repetir: salta las copiadas).
 
