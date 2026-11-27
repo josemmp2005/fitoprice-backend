@@ -21,7 +21,7 @@ El backend de FitoPrice proporciona una API para:
 -  **Express (NodeJs)** — Framework backend ligero para crear y gestionar endpoints RESTful.
 -  **PostgreSQL** — En local con Docker; en producción en **Neon** (PostgreSQL serverless).
 -  **JWT + bcrypt** — Autenticación de administradores.
--  **Cloudflare R2** — Almacenamiento de las fotos de los productos (compatible con S3, firmado con `aws4fetch`).
+-  **Cloudflare R2** — Almacenamiento de las fotos de los productos (compatible con S3, firmado con `aws4fetch`), en WebP convertidas con `sharp`.
 -  **Vercel** — Despliegue de la API como función serverless.
 
 | Entorno | API | Base de datos | Fotos | Scraping |
@@ -54,7 +54,7 @@ Administrador de desarrollo: `admin@fitoprice.local` / `admin1234`.
 | `npm start` | Arranca la API (`server.js`) |
 | `npm run scrape` | Lee los precios de las tiendas y los guarda (`-- --dry` sin guardar, `-- --company=ID` solo una tienda) |
 | `npm run enrich` | Recalcula envase, tipo y materias activas de todos los productos y los vuelve a enlazar con el registro |
-| `npm run images` | Copia a Cloudflare R2 las fotos que aún apuntan a la tienda (`-- --dry` solo cuenta) |
+| `npm run images` | Guarda en Cloudflare R2, en WebP, las fotos que aún no lo están (`-- --dry` solo cuenta) |
 | `npm run db:neon` | Copia la base de datos local (esquema, datos e histórico) a Neon (`-- --check` solo cuenta sus tablas) |
 
 ### Variables de entorno
@@ -139,12 +139,14 @@ Las fotos se guardan en un bucket de R2 en vez de enlazarlas desde cada tienda: 
 borran sus fotos, algunas no dejan enlazarlas desde otra web, y Neon tiene poco espacio, así que la
 base de datos solo guarda la URL (`lib/imageStore.js`).
 
-- Al **crear un producto**, la API descarga su foto y la sube como `products/<hash>.<ext>`
-  (con caché de un año). `products.product_img_url` pasa a ser la URL pública de R2.
+- Al **crear un producto**, la API descarga su foto, la pasa a **WebP** con `sharp` (calidad 80, máximo 800 px
+  de lado) y la sube como `products/<hash>.webp` (con caché de un año). `products.product_img_url` pasa a ser
+  la URL pública de R2. Una foto de catálogo queda en unos pocos kB (por ejemplo, de 34 kB en JPG a 6 kB).
 - El nombre del archivo es un hash de la URL de la tienda, no el id del producto: la base local y la de
   producción usan el mismo bucket y sus ids no tienen por qué coincidir.
 - Si R2 no está configurado o la descarga falla, se queda la URL de la tienda: mejor una foto enlazada que ninguna.
-- Las fotos que había antes de configurar R2 se copian con `npm run images` (se puede repetir: salta las copiadas).
+- `npm run images` guarda en WebP las que faltan: las que aún apuntan a la tienda y las que estaban en R2 en otro
+  formato (estas se convierten con el mismo nombre y se borra el original). Se puede repetir: salta las que ya son WebP.
 
 ---
 

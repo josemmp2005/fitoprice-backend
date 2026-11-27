@@ -34,3 +34,7 @@ coverage/
 *.tar.gz
 .neon
 .env.neon
+
+.vercel
+.env*
+!.env.example
