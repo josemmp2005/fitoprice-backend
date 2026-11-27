@@ -7,9 +7,12 @@
     "start": "node server.js",
     "dev": "node server.js",
     "scrape": "node scripts/scrape.js",
-    "enrich": "node scripts/enrich.js"
+    "enrich": "node scripts/enrich.js",
+    "images": "node scripts/images.js",
+    "db:neon": "node scripts/copy-to-neon.js"
   },
   "dependencies": {
+    "aws4fetch": "^1.0.20",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.0.0",
     "cors": "^2.8.5",
@@ -17,5 +20,8 @@
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.11.3"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

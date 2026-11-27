@@ -1,8 +1,7 @@
 import { query } from "../config/db.js";
 import { packPrice, productInfo } from "../lib/productInfo.js";
 import { matchRegistry } from "../lib/registryMatch.js";
-
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+import { storeImage } from "../lib/imageStore.js";
 
 async function processProduct(productName, productPrice, productImgUrl, productLink, companyId) {
 
@@ -26,6 +25,12 @@ async function processProduct(productName, productPrice, productImgUrl, productL
             );
             productId = inserted.rows[0].id;
             isNew = true;
+
+            // La foto se copia a Cloudflare R2 (si está configurado) con el id del producto como nombre
+            const storedImg = await storeImage(productImgUrl, productId);
+            if (storedImg !== productImgUrl) {
+                await query("UPDATE products SET product_img_url = $1 WHERE id = $2", [storedImg, productId]);
+            }
         }
 
         // 3️ Insertar precio
@@ -74,10 +79,8 @@ export async function importGroups(data) {
     let errors = [];
     let totalProcessed = 0;
 
-    const BATCH_SIZE = 50; // Procesar 50 productos, luego pausa
-    const BATCH_DELAY = 1000; // 1 segundo entre lotes grandes
-    const PRODUCT_DELAY = 0; // Sin pausa entre productos individuales
-
+    // Sin pausas entre productos: en Vercel la función tiene un tiempo máximo (vercel.json)
+    // y Neon aguanta sin problema unas cientos de consultas seguidas.
     console.log(`🚀 Iniciando importación de productos...`);
 
     // Iterar sobre cada grupo
@@ -124,16 +127,6 @@ export async function importGroups(data) {
                 }
 
                 insertedPrices++;
-
-                // Pausa cada X productos
-                if (totalProcessed % BATCH_SIZE === 0) {
-                    console.log(`⏸️  Pausa de ${BATCH_DELAY}ms después de ${BATCH_SIZE} productos...`);
-                    await sleep(BATCH_DELAY);
-                } else if (PRODUCT_DELAY > 0) {
-                    // Pausa entre productos (solo si está configurada)
-                    await sleep(PRODUCT_DELAY);
-                }
-
             } catch (productError) {
                 console.error(`   ❌ Error: ${productError.message}`);
                 errors.push({ product: name[i], error: productError.message });
