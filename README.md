@@ -55,7 +55,7 @@ Administrador de desarrollo: `admin@fitoprice.local` / `admin1234`.
 | `npm run scrape` | Lee los precios de las tiendas y los guarda (`-- --dry` sin guardar, `-- --company=ID` solo una tienda) |
 | `npm run enrich` | Recalcula envase, tipo y materias activas de todos los productos y los vuelve a enlazar con el registro |
 | `npm run images` | Copia a Cloudflare R2 las fotos que aún apuntan a la tienda (`-- --dry` solo cuenta) |
-| `npm run db:neon` | Copia la base de datos local (esquema, datos e histórico) a Neon |
+| `npm run db:neon` | Copia la base de datos local (esquema, datos e histórico) a Neon (`-- --check` solo cuenta sus tablas) |
 
 ### Variables de entorno
 
@@ -64,7 +64,7 @@ Están todas en `.env.example`, con comentarios.
 | Variable | Para qué |
 |---|---|
 | `DATABASE_URL` | Conexión a PostgreSQL. En Vercel, la cadena *pooled* de Neon |
-| `NEON_DATABASE_URL` | Solo para `npm run db:neon`: la cadena *directa* de Neon |
+| `NEON_DATABASE_URL` | Opcional: cadena *directa* de Neon para `npm run db:neon` si no usas `.env.neon` |
 | `JWT_SECRET` | Firma de las sesiones de administrador |
 | `SCRAPER_API_KEY` | Clave con la que n8n llama a la API (cabecera `X-API-Key`) |
 | `CORS_ORIGINS` | Webs que pueden llamar a la API, separadas por comas |
@@ -158,7 +158,28 @@ Lo propio de este repositorio:
 - `vercel.json` manda todas las rutas a esa función, la ejecuta en Fráncfort (`fra1`, cerca de Neon en
   `eu-central-1`) y le da hasta 60 s (la importación de una lectura completa tarda unos segundos).
 - Vercel corta las peticiones de más de **4,5 MB**: los lotes del registro (menos de 2 MB) y una lectura de precios caben.
-- `config/db.js` abre pocas conexiones por instancia cuando corre en Vercel; usa la cadena *pooled* de Neon.
-- Para pasar los datos actuales a Neon: pon `NEON_DATABASE_URL` en `.env` y ejecuta `npm run db:neon`
-  (usa `pg_dump` y `psql` del contenedor `fitoprice-db`, no hace falta instalar PostgreSQL). La base de datos ocupa ~12 MB,
-  muy por debajo de los 0,5 GB del plan gratuito de Neon.
+- `config/db.js` usa `pg` (node-postgres), el driver que recomienda Neon para Vercel con Fluid compute, y en Vercel
+  llama a `attachDatabasePool` (`@vercel/functions`) para cerrar las conexiones inactivas antes de que la instancia
+  se suspenda. Usa la cadena *pooled* de Neon.
+
+### Neon
+
+El backend está vinculado al proyecto de Neon con su CLI (`npm i -g neon`):
+
+- `neon.ts` declara los servicios del proyecto (solo Postgres) y la política de ramas: las ramas nuevas que no son
+  la de producción caducan a los 7 días. `.neon` (ignorado por git) guarda la organización, el proyecto y la rama `production`.
+- **Las variables de Neon van en `.env.neon`, no en `.env`**, para que la API local siga usando el PostgreSQL de Docker:
+  ```bash
+  neon env pull --file .env.neon     # DATABASE_URL (pooled), DATABASE_URL_UNPOOLED (directa), NEON_BRANCH…
+  neon deploy --no-env-pull          # aplica neon.ts; sin --no-env-pull escribiría en .env
+  ```
+  `neon init` y `neon deploy` escriben por defecto en `.env`: si lo hacen, vuelve a poner en `DATABASE_URL`
+  la cadena local de `.env.example`.
+- **Copiar los datos locales a Neon:** `npm run db:neon` lee la conexión directa de `.env.neon` y vuelca la base de datos
+  con `pg_dump` y `psql` del contenedor `fitoprice-db` (no hace falta instalar PostgreSQL). La base de Neon tiene que estar
+  vacía; `npm run db:neon -- --check` cuenta sus tablas. Ocupa ~12 MB, muy por debajo de los 0,5 GB del plan gratuito.
+- **Usar Neon desde un script local**, por ejemplo para copiar las fotos de producción a R2:
+  `node --env-file=.env.neon scripts/images.js` (las variables de `--env-file` ganan a las de `.env`).
+- En **Vercel**, `DATABASE_URL` es el `DATABASE_URL` (pooled) de `.env.neon`.
+- La base de datos de producción tiene el admin de desarrollo del seed (`admin@fitoprice.local` / `admin1234`):
+  cambia su contraseña antes de publicar.

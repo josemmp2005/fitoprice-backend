@@ -12,6 +12,7 @@
     "db:neon": "node scripts/copy-to-neon.js"
   },
   "dependencies": {
+    "@vercel/functions": "3.11.2",
     "aws4fetch": "^1.0.20",
     "bcryptjs": "^3.0.3",
     "cheerio": "^1.0.0",
@@ -23,5 +24,9 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@neon/config": "^1.14.8",
+    "@neon/env": "^2.1.11"
   }
 }
