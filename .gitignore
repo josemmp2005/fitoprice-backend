@@ -32,3 +32,5 @@ coverage/
 *.zip
 *.tar
 *.tar.gz
+.neon
+.env.neon
